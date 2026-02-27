@@ -1,0 +1,115 @@
+name: brew bottles
+
+on:
+  workflow_dispatch:
+    inputs:
+      formula:
+        description: Formula to bottle
+        required: true
+        default: kibob
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15-intel, macos-26]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    env:
+      FORMULA: ${{ inputs.formula }}
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v4
+
+      - name: Set up Homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Homebrew Bundler RubyGems
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.set-up-homebrew.outputs.gems-path }}
+          key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
+          restore-keys: ${{ matrix.os }}-rubygems-
+
+      - name: Tap repository
+        run: brew tap --force-auto-update "$GITHUB_REPOSITORY"
+
+      - name: Build bottle
+        run: |
+          brew uninstall --formula --force "$FORMULA" || true
+          brew install --formula --build-bottle "$FORMULA"
+
+      - name: Export stable version
+        run: |
+          VERSION="$(brew info --json=v2 "$FORMULA" | python3 -c 'import json,sys; print(json.load(sys.stdin)["formulae"][0]["versions"]["stable"])')"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Generate bottle JSON
+        run: |
+          ROOT_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/${FORMULA}-${VERSION}"
+          brew bottle --json "$FORMULA" --root-url="$ROOT_URL"
+
+      - name: Upload bottle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bottles_${{ matrix.os }}
+          path: |
+            *.bottle.*
+            *.json
+
+  merge-and-publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      FORMULA: ${{ inputs.formula }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out tap
+        uses: actions/checkout@v4
+
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download bottle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bottles_*
+          path: ./bottles
+          merge-multiple: true
+
+      - name: Export stable version
+        run: |
+          VERSION="$(brew info --json=v2 "$FORMULA" | python3 -c 'import json,sys; print(json.load(sys.stdin)["formulae"][0]["versions"]["stable"])')"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Merge bottle metadata into formula
+        run: |
+          ROOT_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/${FORMULA}-${VERSION}"
+          brew bottle --merge --write --no-commit --root-url="$ROOT_URL" ./bottles/*.json
+
+      - name: Create or update release
+        run: |
+          TAG="${FORMULA}-${VERSION}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --notes "Homebrew bottles for $FORMULA $VERSION"
+          gh release upload "$TAG" ./bottles/*.bottle.* --clobber
+
+      - name: Commit bottle changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/*.rb
+          if git diff --cached --quiet; then
+            echo "No formula changes to commit"
+            exit 0
+          fi
+          git commit -m "${FORMULA} ${VERSION} bottles"
+          git push origin main
