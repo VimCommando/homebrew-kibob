@@ -37,7 +37,7 @@ jobs:
           restore-keys: ${{ matrix.os }}-rubygems-
 
       - name: Tap repository
-        run: brew tap --force-auto-update "$GITHUB_REPOSITORY"
+        run: brew tap "$GITHUB_REPOSITORY"
 
       - name: Build bottle
         run: |
