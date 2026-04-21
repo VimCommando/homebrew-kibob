@@ -1,18 +1,27 @@
-# VimCommando Kibob
+# homebrew-kibob
 
-## How do I install these formulae?
+This tap has been retired.
 
-`brew install vimcommando/kibob/<formula>`
+`kibob` and future VimCommando formulae now live in `VimCommando/homebrew-tools`.
 
-Or `brew tap vimcommando/kibob` and then `brew install <formula>`.
+## Migrate
 
-Or, in a `brew bundle` `Brewfile`:
+```bash
+brew untap VimCommando/kibob
+brew tap VimCommando/tools
+brew install kibob
+```
+
+If you use a `Brewfile`, replace:
 
 ```ruby
 tap "vimcommando/kibob"
-brew "<formula>"
+brew "kibob"
 ```
 
-## Documentation
+with:
 
-`brew help`, `man brew` or check [Homebrew's documentation](https://docs.brew.sh).
+```ruby
+tap "vimcommando/tools"
+brew "kibob"
+```
