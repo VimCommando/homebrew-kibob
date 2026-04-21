@@ -3,7 +3,7 @@ class Kibob < Formula
   homepage "https://github.com/VimCommando/homebrew-tools"
   url "https://github.com/VimCommando/homebrew-kibob/archive/refs/heads/main.tar.gz"
   version "0.0.0"
-  sha256 "3d9d10588b8284d638ad5f8b73892f715f28e2b103ebc4936ee5d6087caf04d2"
+  sha256 "3c2a527d1b764b046309af4b1d425db2eab1d3a6d8624f1af5365eee40e02d8a"
   license "Apache-2.0"
 
   def install
